@@ -1,0 +1,27 @@
+# Terraform local state
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Overrides locais
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Diretório de cache
+.terraform/
+
+# Variáveis locais (sensíveis)
+*.tfvars
+*.tfvars.json
+
+# Backup criado pelo terraform
+*.backup
+*.bak
+.git
+
+assets/
