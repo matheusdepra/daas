@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+google-cloud
+google-cloud-aiplatform
+google-cloud-bigquery
+google-cloud-firestore
+pydantic
+chainlit
+httpx
