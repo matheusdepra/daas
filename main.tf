@@ -161,6 +161,7 @@ resource "google_bigquery_table" "raw_olist_sellers" {
 resource "google_bigquery_table" "olist_customer" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
   table_id   = "olist_customer"
+  deletion_protection = false
 
   schema = <<EOF
 [
@@ -177,6 +178,7 @@ EOF
 resource "google_bigquery_table" "olist_geolocation" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
   table_id   = "olist_geolocation"
+  deletion_protection = false
 
   schema = <<EOF
 [
@@ -193,6 +195,7 @@ EOF
 resource "google_bigquery_table" "olist_order_items" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
   table_id   = "olist_order_items"
+  deletion_protection = false
 
   schema = <<EOF
 [
@@ -209,6 +212,7 @@ EOF
 resource "google_bigquery_table" "olist_order_payments" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
   table_id   = "olist_order_payments"
+  deletion_protection = false
 
   schema = <<EOF
 [
@@ -225,6 +229,8 @@ EOF
 resource "google_bigquery_table" "olist_order_reviews" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
   table_id   = "olist_order_reviews"
+  deletion_protection = false
+
 
   schema = <<EOF
 [
@@ -243,6 +249,7 @@ EOF
 resource "google_bigquery_table" "olist_orders" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
   table_id   = "olist_orders"
+  deletion_protection = false
 
   schema = <<EOF
 [
@@ -262,6 +269,7 @@ EOF
 resource "google_bigquery_table" "olist_products" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
   table_id   = "olist_products"
+  deletion_protection = false
 
   schema = <<EOF
 [
@@ -281,7 +289,8 @@ EOF
 # Olist Sellers Table
 resource "google_bigquery_table" "olist_sellers" {
   dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_sellers"
+    table_id   = "olist_sellers"
+  deletion_protection = false
 
   schema = <<EOF
 [
@@ -328,3 +337,23 @@ resource "google_bigquery_table" "f_orders" {
 EOF
 }
 
+
+# Habilita a API do Firestore
+resource "google_project_service" "firestore" {
+  project                    = "daas-mvp-472103"
+  service                    = "firestore.googleapis.com"
+  disable_dependent_services = true
+}
+
+# Banco de Dados Firestore para memória do agente
+resource "google_firestore_database" "agent_memory" {
+  project    = "daas-mvp-472103"
+  name       = "daas-mvp-chat-history"
+    location_id = "us-central1"
+  type       = "FIRESTORE_NATIVE"
+
+  # Garante que a API esteja habilitada antes de criar o banco
+  depends_on = [
+    google_project_service.firestore,
+  ]
+}
