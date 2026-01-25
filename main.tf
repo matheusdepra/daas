@@ -3,357 +3,439 @@ provider "google" {
   region  = "us-central1"
 }
 
+##############################################
+# Criação de Buckets
+##############################################
+
+# Bucket para dados brutos do cliente (landing)
+# Arquivos de entrada do cliente
+# Pode conter dados incorretos e lixos
+# Deleção após 7 dias
+resource "google_storage_bucket" "landing" {
+  name          = "daas-landing-mvp"
+  location      = "US"
+  force_destroy = false
+  storage_class = "STANDARD"
+    
+  uniform_bucket_level_access = true
+  versioning {
+    enabled = false
+  }
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      age = 7
+    }
+  }
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "landing"
+  }
+}
+
 # Bucket para dados brutos (bronze)
+# Deleção - 365 dias
 resource "google_storage_bucket" "bronze" {
   name          = "daas-bronze-mvp"
   location      = "US"
-  force_destroy = true
+  force_destroy = false
+  storage_class = "STANDARD"
+
+  uniform_bucket_level_access = true
+
   versioning {
     enabled = true
   }
-}
-
-# BigQuery Dataset (bronze -> raw)
-resource "google_bigquery_dataset" "mvp_bronze" {
-  dataset_id                 = "mvp_bronze"
-  location                   = "US"
-  delete_contents_on_destroy = true
-}
-
-# BigQuery Dataset (silver -> Tratados)
-resource "google_bigquery_dataset" "mvp_silver" {
-  dataset_id                 = "mvp_silver"
-  location                   = "US"
-  delete_contents_on_destroy = true
-}
-
-# Carregamento Big Query Raw Bronze
-resource "google_bigquery_table" "raw_olist_customers" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_customers_raw"
-  deletion_protection = false
-
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_customers_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""   # precisa definir, mesmo que seja o padrão
+  lifecycle_rule {
+    action {
+      type = "Delete"
     }
+    condition {
+      age = 365
+    }
+  }
+
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "bronze"
   }
 }
 
-resource "google_bigquery_table" "raw_olist_geolocation" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_geolocation_raw"
-  deletion_protection = false
+# Bucket para dados limpos e tratados - Silver
+# Deleção - 180 dias
+resource "google_storage_bucket" "silver" {
+  name          = "daas-silver-mvp"
+  location      = "US"
+  force_destroy = false
+  storage_class = "STANDARD"
 
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_geolocation_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""  
+  uniform_bucket_level_access = true
+
+  versioning {
+    enabled = true
+  }
+  lifecycle_rule {
+    action {
+      type = "Delete"
     }
+    condition {
+      age = 180
+    }
+  }
+
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "silver"
   }
 }
 
-resource "google_bigquery_table" "raw_olist_order_items" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_order_items_raw"
-  deletion_protection = false
+# Bucket para dados com erro, sem schema  - quarantine
+# Deleção - 30 dias
+resource "google_storage_bucket" "quarantine" {
+  name          = "daas-quarantine-mvp"
+  location      = "US"
+  force_destroy = false
+  storage_class = "STANDARD"
 
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_order_items_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""  
+  uniform_bucket_level_access = true
+
+  versioning {
+    enabled = true
+  }
+  lifecycle_rule {
+    action {
+      type = "Delete"
     }
+    condition {
+      age = 30
+    }
+  }
+
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "quarantine"
   }
 }
 
-resource "google_bigquery_table" "raw_olist_order_payments" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_order_payments_raw"
-  deletion_protection = false
 
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_order_payments_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""  
-    }
-  }
-}
-
-resource "google_bigquery_table" "raw_olist_order_reviews" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_order_reviews_raw"
-  deletion_protection = false
-
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_order_reviews_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""  
-      allow_quoted_newlines = true
-    }
-  }
-}
-
-resource "google_bigquery_table" "raw_olist_orders" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_orders_raw"
-  deletion_protection = false
-
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_orders_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""  
-    }
-  }
-}
-
-resource "google_bigquery_table" "raw_olist_products" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_products_raw"
-  deletion_protection = false
-
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_products_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""  
-    }
-  }
-}
-
-resource "google_bigquery_table" "raw_olist_sellers" {
-  dataset_id          = google_bigquery_dataset.mvp_bronze.dataset_id
-  table_id            = "olist_sellers_raw"
-  deletion_protection = false
-
-  external_data_configuration {
-    source_format = "CSV"
-    autodetect    = true
-    source_uris   = ["gs://${google_storage_bucket.bronze.name}/olist/olist_sellers_dataset.csv"]
-    csv_options {
-      skip_leading_rows = 1
-      quote             = "\""  
-    }
-  }
-}
-
-# Olist Customer Table
-resource "google_bigquery_table" "olist_customer" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_customer"
-  deletion_protection = false
-
-  schema = <<EOF
-[
-  {"name":"customer_id", "type":"STRING", "mode":"REQUIRED", "description":"Customer ID"},
-  {"name":"customer_unique_id", "type":"STRING", "mode":"REQUIRED", "description":"Customer Unique ID"},
-  {"name":"customer_zip_code_prefix", "type":"STRING", "mode":"NULLABLE", "description":"Customer zip code prefix"},
-  {"name":"customer_city", "type":"STRING", "mode":"NULLABLE", "description":"Customer City"},
-  {"name":"customer_state", "type":"STRING", "mode":"NULLABLE", "description":"Customer State"}
-]
-EOF
-}
-
-# Olist Geolocation Table
-resource "google_bigquery_table" "olist_geolocation" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_geolocation"
-  deletion_protection = false
-
-  schema = <<EOF
-[
-  {"name":"geolocation_zip_code_prefix", "type":"STRING", "mode":"REQUIRED", "description":"Geolocation zip code prefix"},
-  {"name":"geolocation_lat", "type":"FLOAT", "mode":"NULLABLE", "description":"Geolocation latitude"},
-  {"name":"geolocation_lng", "type":"FLOAT", "mode":"NULLABLE", "description":"Geolocation longitude"},
-  {"name":"geolocation_city", "type":"STRING", "mode":"NULLABLE", "description":"Geolocation City"},
-  {"name":"geolocation_state", "type":"STRING", "mode":"NULLABLE", "description":"Geolocation State"}
-]
-EOF
-}
-
-# Olist Order Items Table
-resource "google_bigquery_table" "olist_order_items" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_order_items"
-  deletion_protection = false
-
-  schema = <<EOF
-[
-  {"name":"order_id", "type":"STRING", "mode":"REQUIRED", "description":"Order ID"},
-  {"name":"order_item_id", "type":"STRING", "mode":"REQUIRED", "description":"Order Item ID"},
-  {"name":"seller_id", "type":"STRING", "mode":"REQUIRED", "description":"Seller ID"},
-  {"name":"shipping_limit_date", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Shipping Limit Date"},
-  {"name":"price", "type":"FLOAT", "mode":"NULLABLE", "description":"Item price"}
-]
-EOF
-}
-
-# Olist Order Payments Table
-resource "google_bigquery_table" "olist_order_payments" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_order_payments"
-  deletion_protection = false
-
-  schema = <<EOF
-[
-  {"name":"order_id", "type":"STRING", "mode":"REQUIRED", "description":"Order ID"},
-  {"name":"payment_sequential", "type":"INTEGER", "mode":"NULLABLE", "description":"Payment Sequential Number"},
-  {"name":"payment_type", "type":"STRING", "mode":"NULLABLE", "description":"Payment Type"},
-  {"name":"payment_installments", "type":"INTEGER", "mode":"NULLABLE", "description":"Payment Installments"},
-  {"name":"payment_value", "type":"FLOAT", "mode":"NULLABLE", "description":"Payment Value"}
-]
-EOF
-}
-
-# Olist Order Reviews Table
-resource "google_bigquery_table" "olist_order_reviews" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_order_reviews"
-  deletion_protection = false
+##############################################
+# Criação das Tabelas Big Query
+##############################################
+# Nesse ponto suportamos apenas a criação de 
+# datasets
+# Tabelas devem ser criadas no pipeline de dados
 
 
-  schema = <<EOF
-[
-  {"name":"review_id", "type":"STRING", "mode":"REQUIRED", "description":"Review ID"},
-  {"name":"order_id", "type":"STRING", "mode":"REQUIRED", "description":"Order ID"},
-  {"name":"review_score", "type":"INTEGER", "mode":"NULLABLE", "description":"Review Score"},
-  {"name":"review_comment_title", "type":"STRING", "mode":"NULLABLE", "description":"Review Comment Title"},
-  {"name":"review_comment_message", "type":"STRING", "mode":"NULLABLE", "description":"Review Comment Message"},
-  {"name":"review_creation_date", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Review Creation Date"},
-  {"name":"review_answer_timestamp", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Review Answer Timestamp"}
-]
-EOF
-}
-
-# Olist Orders Table
-resource "google_bigquery_table" "olist_orders" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_orders"
-  deletion_protection = false
-
-  schema = <<EOF
-[
-  {"name":"order_id", "type":"STRING", "mode":"REQUIRED", "description":"Order ID"},
-  {"name":"customer_id", "type":"STRING", "mode":"REQUIRED", "description":"Customer ID"},
-  {"name":"order_status", "type":"STRING", "mode":"REQUIRED", "description":"Order Status"},
-  {"name":"order_purchase_timestamp", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Purchase Timestamp"},
-  {"name":"order_approved_at", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Approved At"},
-  {"name":"order_delivered_carrier_date", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Delivered Carrier Date"},
-  {"name":"order_delivered_customer_date", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Delivered Customer Date"},
-  {"name":"order_estimated_delivery_date", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Estimated Delivery Date"}
-]
-EOF
-}
-
-# Olist Products Table
-resource "google_bigquery_table" "olist_products" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-  table_id   = "olist_products"
-  deletion_protection = false
-
-  schema = <<EOF
-[
-  {"name":"product_id", "type":"STRING", "mode":"REQUIRED", "description":"Product ID"},
-  {"name":"product_category_name", "type":"STRING", "mode":"REQUIRED", "description":"Product Category Name"},
-  {"name":"product_name_lenght", "type":"INTEGER", "mode":"REQUIRED", "description":"Product Name Lenght"},
-  {"name":"product_description_lenght", "type":"INTEGER", "mode":"NULLABLE", "description":"Product Description Lenght"},
-  {"name":"product_photos_qty", "type":"INTEGER", "mode":"NULLABLE", "description":"Product Photos Quantity"},
-  {"name":"product_weight_g", "type":"INTEGER", "mode":"NULLABLE", "description":"Product Weight Grams"},
-  {"name":"product_length_cm", "type":"INTEGER", "mode":"NULLABLE", "description":"Product Length Centimeters"},
-  {"name":"product_height_cm", "type":"INTEGER", "mode":"NULLABLE", "description":"Product Height Centimeters"},
-  {"name":"product_width_cm", "type":"INTEGER", "mode":"NULLABLE", "description":"Product Width Centimeters"}
-]
-EOF
-}
-
-# Olist Sellers Table
-resource "google_bigquery_table" "olist_sellers" {
-  dataset_id = google_bigquery_dataset.mvp_silver.dataset_id
-    table_id   = "olist_sellers"
-  deletion_protection = false
-
-  schema = <<EOF
-[
-  {"name":"seller_id", "type":"STRING", "mode":"REQUIRED", "description":"Seller ID"},
-  {"name":"seller_zip_code_prefix", "type":"STRING", "mode":"REQUIRED", "description":"Seller ZIP Code Prefix"},
-  {"name":"seller_city", "type":"STRING", "mode":"REQUIRED", "description":"Seller City"},
-  {"name":"seller_state", "type":"STRING", "mode":"NULLABLE", "description":"Seller State"}
-]
-EOF
-}
-
-
-# BigQuery Dataset Gold
-resource "google_bigquery_dataset" "mvp_gold" {
-  dataset_id = "mvp_gold"
+resource "google_bigquery_dataset" "silver" {
+  dataset_id = "silver"
   location   = "US"
-  delete_contents_on_destroy = false
+
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "silver"
+  }
 }
 
-# Fato de Pedidos (Gold)
-resource "google_bigquery_table" "f_orders" {
-  dataset_id = google_bigquery_dataset.mvp_gold.dataset_id
-  table_id   = "f_orders"
-  deletion_protection = false
+resource "google_bigquery_dataset" "gold" {
+  dataset_id = "gold"
+  location   = "US"
 
-  schema = <<EOF
-[
-  {"name":"order_id", "type":"STRING", "mode":"REQUIRED", "description":"Order ID"},
-  {"name":"customer_id", "type":"STRING", "mode":"REQUIRED", "description":"Customer ID"},
-  {"name":"customer_unique_id", "type":"STRING", "mode":"NULLABLE", "description":"Customer Unique ID"},
-  {"name":"customer_city", "type":"STRING", "mode":"NULLABLE", "description":"Customer City"},
-  {"name":"customer_state", "type":"STRING", "mode":"NULLABLE", "description":"Customer State"},
-  {"name":"order_status", "type":"STRING", "mode":"REQUIRED", "description":"Order Status"},
-  {"name":"order_purchase_ts", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Purchase Timestamp"},
-  {"name":"order_approved_ts", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Approved Timestamp"},
-  {"name":"order_delivered_customer_ts", "type":"TIMESTAMP", "mode":"NULLABLE", "description":"Order Delivered Customer Timestamp"},
-  {"name":"order_estimated_delivery_date", "type":"DATE", "mode":"NULLABLE", "description":"Order Estimated Delivery Date"},
-  {"name":"total_items", "type":"INTEGER", "mode":"NULLABLE", "description":"Total items in order"},
-  {"name":"total_order_value", "type":"FLOAT", "mode":"NULLABLE", "description":"Sum of item prices"},
-  {"name":"total_payment_value", "type":"FLOAT", "mode":"NULLABLE", "description":"Sum of payments"},
-  {"name":"max_installments", "type":"INTEGER", "mode":"NULLABLE", "description":"Max number of installments"},
-  {"name":"delivered_on_time", "type":"INTEGER", "mode":"NULLABLE", "description":"1 if delivered on or before estimated date, else 0"}
-]
-EOF
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "gold"
+  }
+}
+
+resource "google_bigquery_dataset" "quarantine" {
+  dataset_id = "quarantine"
+  location   = "US"
+
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "quarantine"
+  }
 }
 
 
-# Habilita a API do Firestore
-resource "google_project_service" "firestore" {
-  project                    = "daas-mvp-472103"
-  service                    = "firestore.googleapis.com"
-  disable_dependent_services = true
+##############################################
+# Criação das service accounts
+##############################################
+
+# Ingestão do cloud run
+resource "google_service_account" "cloud_run_ingest" {
+  account_id   = "sa-daas-ingest"
+  display_name = "DaaS Cloud Run Ingest Service"
 }
 
-# Banco de Dados Firestore para memória do agente
-resource "google_firestore_database" "agent_memory" {
-  project    = "daas-mvp-472103"
-  name       = "daas-mvp-chat-history"
-    location_id = "us-central1"
-  type       = "FIRESTORE_NATIVE"
-
-  # Garante que a API esteja habilitada antes de criar o banco
-  depends_on = [
-    google_project_service.firestore,
-  ]
+resource "google_service_account" "eventarc" {
+  account_id   = "sa-daas-eventarc"
+  display_name = "DaaS Eventarc Trigger"
 }
+
+resource "google_service_account" "cloud_run_silver" {
+  account_id   = "sa-daas-silver"
+  display_name = "DaaS Silver Job Service"
+}
+
+##############################################
+# IAM
+##############################################
+resource "google_project_iam_member" "ingest_gcs" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.cloud_run_ingest.email}"
+}
+
+# BIG Query
+resource "google_project_iam_member" "ingest_bq" {
+  project = var.project_id
+  role    = "roles/bigquery.dataEditor"
+  member  = "serviceAccount:${google_service_account.cloud_run_ingest.email}"
+}
+
+# Firestore
+resource "google_project_iam_member" "ingest_firestore" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.cloud_run_ingest.email}"
+}
+
+# Logs
+resource "google_project_iam_member" "ingest_logs" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.cloud_run_ingest.email}"
+}
+
+# Event
+resource "google_project_iam_member" "eventarc_receiver" {
+  project = var.project_id
+  role    = "roles/eventarc.eventReceiver"
+  member  = "serviceAccount:${google_service_account.eventarc.email}"
+}
+
+# Acessor reader landing bucket
+resource "google_storage_bucket_iam_member" "eventarc_landing_reader" {
+  bucket = google_storage_bucket.landing.name
+  role   = "roles/storage.legacyBucketReader"
+  member = "serviceAccount:${google_service_account.eventarc.email}"
+}
+
+# acesso pub sub apara event arc
+resource "google_project_iam_member" "gcs_pubsub_publisher" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com"
+}
+
+# Acesso a images
+resource "google_project_iam_member" "ingest_artifact_registry" {
+  project = var.project_id
+  role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:${google_service_account.cloud_run_ingest.email}"
+}
+
+#------------------------------------
+# IAM para Silver Jobs
+#------------------------------------
+# Ler Bronze
+resource "google_project_iam_member" "silver_gcs" {
+  project = var.project_id
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
+}
+
+# Escrever BigQuery Silver
+resource "google_project_iam_member" "silver_bq" {
+  project = var.project_id
+  role    = "roles/bigquery.dataEditor"
+  member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
+}
+
+# Logs
+resource "google_project_iam_member" "silver_logs" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
+}
+
+# Big query load
+resource "google_project_iam_member" "silver_bq_jobuser" {
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
+}
+
+
+##############################################
+# Criação do Cloud Run Service 
+# Ingest
+##############################################
+
+resource "google_cloud_run_service" "daas_ingest" {
+  name     = "daas-ingest-worker"
+  location = var.region
+
+  template {
+    spec {
+      service_account_name = google_service_account.cloud_run_ingest.email
+      timeout_seconds      = 300
+      container_concurrency = 1
+
+      containers {
+        image = var.ingest_image
+
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "1Gi"
+          }
+        }
+
+        env {
+          name  = "LANDING_BUCKET"
+          value = google_storage_bucket.landing.name
+        }
+
+        env {
+          name  = "BRONZE_BUCKET"
+          value = google_storage_bucket.bronze.name
+        }
+
+        env {
+          name  = "SILVER_BUCKET"
+          value = google_storage_bucket.silver.name
+        }
+
+        env {
+          name  = "QUARANTINE_BUCKET"
+          value = google_storage_bucket.quarantine.name
+        }
+
+        env {
+          name  = "BQ_SILVER_DATASET"
+          value = "silver"
+        }
+
+        env {
+          name  = "BQ_QUARANTINE_DATASET"
+          value = "quarantine"
+        }
+      }
+    }
+  }
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
+##############################################
+# Criação do Cloud Run Service 
+# Bronze -> Silver
+##############################################
+
+resource "google_cloud_run_service" "daas_silver" {
+  name     = "daas-silver-job"
+  location = var.region
+
+  template {
+    spec {
+      service_account_name = google_service_account.cloud_run_silver.email
+      timeout_seconds      = 900
+
+      containers {
+        image = var.silver_image
+
+        resources {
+          limits = {
+            cpu    = "2"
+            memory = "2Gi"
+          }
+        }
+
+        env {
+          name  = "BRONZE_BUCKET"
+          value = google_storage_bucket.bronze.name
+        }
+
+        env {
+          name  = "BQ_SILVER_DATASET"
+          value = "silver"
+        }
+      }
+    }
+  }
+
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
+
+
+##############################################
+# Firestore para Metadados
+##############################################
+resource "google_firestore_database" "metadata" {
+  name        = "daas-metadata"
+  location_id = "us-central1"
+  type        = "FIRESTORE_NATIVE"
+}
+
+##############################################
+# Cria Event Arc
+##############################################
+resource "google_cloud_run_service_iam_member" "eventarc_invoker" {
+  location = google_cloud_run_service.daas_ingest.location
+  service  = google_cloud_run_service.daas_ingest.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.eventarc.email}"
+}
+
+
+
+##############################################
+# Cria Event Arc - Trigger
+##############################################
+resource "google_eventarc_trigger" "gcs_to_cloud_run" {
+  name     = "gcs-finalize-to-daas-ingest"
+  location = "us"
+
+  matching_criteria {
+    attribute = "type"
+    value     = "google.cloud.storage.object.v1.finalized"
+  }
+
+  matching_criteria {
+    attribute = "bucket"
+    value     = google_storage_bucket.landing.name
+  }
+
+  destination {
+    cloud_run_service {
+      service = google_cloud_run_service.daas_ingest.name
+      region  = var.region
+    }
+  }
+
+  service_account = google_service_account.eventarc.email
+}
+
+##############################################
+# Output
+##############################################
+output "cloud_run_service" {
+  value = google_cloud_run_service.daas_ingest.name
+}
+
