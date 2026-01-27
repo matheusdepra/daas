@@ -7,6 +7,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from google.cloud import storage, bigquery
+from google.cloud import firestore
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,10 +20,44 @@ BQ_DATASET = os.environ["BQ_SILVER_DATASET"]
 storage_client = storage.Client(project=PROJECT_ID)
 bq_client = bigquery.Client(project=PROJECT_ID)
 
+# Inicia Firestore client
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "daas-mvp-472103")
+firestore_client = firestore.Client(
+    project=PROJECT_ID,
+    database="daas-metadata"
+)
+
 class SilverRequest(BaseModel):
     company: str
     domain: str
     date: str  # yyyy-mm-dd
+
+
+# Verifica se doc ja processado
+def already_processed(company:str, domain: str, bronze_object: str) -> bool:
+    doc_id = make_doc_id(company, domain, bronze_object)
+    
+    doc = firestore_client.collection("silver_runs").document(doc_id).get()
+    return doc.exists
+
+# Marca documentos ja processados
+def mark_processed(company: str, domain: str, bronze_object: str):
+    
+    doc_id = make_doc_id(company, domain, bronze_object)
+    
+    firestore_client.collection("silver_runs").document(doc_id).set({
+        "company": company,
+        "domain": domain,
+        "bronze_object": bronze_object,
+        "status": "PROCESSED",
+        "processed_at": datetime.utcnow()
+    })
+  
+# Cria doc id basedo no bronze object  
+def make_doc_id(company: str, domain: str, bronze_object: str) -> str:
+    safe_path = bronze_object.replace("/", "__")
+    return f"{company}__{domain}__{safe_path}"
+
 
 
 def list_bronze_files(company:str, domain: str, date: str) -> List[str]:
@@ -41,7 +76,15 @@ def infer_and_load(files: List[str], company:str, domain: str):
 
     dfs = []
     for path in files:
+        
         logging.info(f"Lendo {path}")
+        
+        bronze_object = path.replace(f"gs://{BRONZE_BUCKET}/", "")
+        
+        if already_processed(company, domain, bronze_object):
+            logging.info(f"Ignorado (já processado): {bronze_object}")
+            continue
+        
         df = pd.read_csv(path)
         df['company'] = company
         df["domain"] = domain
@@ -65,6 +108,10 @@ def infer_and_load(files: List[str], company:str, domain: str):
     )
 
     load_job.result()
+    
+    # Marca processado
+    mark_processed(company, domain, bronze_object)
+    
     logging.info(f"Dados carregados em {table_id}")
 
 @app.post("/run")

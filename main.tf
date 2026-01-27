@@ -275,6 +275,13 @@ resource "google_project_iam_member" "silver_bq_jobuser" {
   member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
 }
 
+# Firestore
+resource "google_project_iam_member" "silver_firestore" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
+}
+
 
 ##############################################
 # Criação do Cloud Run Service 
