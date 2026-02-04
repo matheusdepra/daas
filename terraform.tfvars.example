@@ -1,0 +1,9 @@
+# Exemplo de configuração para Terraform
+project_id     = "seu-projeto-id"
+project_number = "123456789012"
+# Opcional: sobrescreva a região padrão (us-central1)
+region         = "us-central1"
+
+# Imagens no Artifact Registry (formato: <regiao>-docker.pkg.dev/projeto/repositorio/imagem:tag)
+ingest_image   = "us-central1-docker.pkg.dev/seu-projeto/daas/ingest:latest"
+silver_image   = "us-central1-docker.pkg.dev/seu-projeto/daas/bz_to_silver:latest"

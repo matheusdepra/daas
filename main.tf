@@ -123,6 +123,28 @@ resource "google_storage_bucket" "quarantine" {
   }
 }
 
+# Bucket para Schemas - Contratos
+# Deleção - Nunca
+resource "google_storage_bucket" "schema" {
+  name          = "daas-schema-mvp"
+  location      = "US"
+  force_destroy = false
+  storage_class = "STANDARD"
+
+  uniform_bucket_level_access = true
+
+  versioning {
+    enabled = true
+  }
+
+  labels = {
+    product = "daas"
+    env     = "mvp"
+    layer   = "schemas"
+  }
+}
+
+
 
 ##############################################
 # Criação das Tabelas Big Query
@@ -254,6 +276,14 @@ resource "google_project_iam_member" "silver_gcs" {
   member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
 }
 
+# Gravar no Schema bucket
+resource "google_storage_bucket_iam_member" "silver_schemas" {
+  bucket = google_storage_bucket.schema.name
+  role   = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.cloud_run_silver.email}"
+}
+
+
 # Escrever BigQuery Silver
 resource "google_project_iam_member" "silver_bq" {
   project = var.project_id
@@ -378,6 +408,11 @@ resource "google_cloud_run_service" "daas_silver" {
         env {
           name  = "BQ_SILVER_DATASET"
           value = "silver"
+        }
+
+          env {
+            name  = "SCHEMA_BUCKET"
+            value = google_storage_bucket.schema.name
         }
       }
     }
